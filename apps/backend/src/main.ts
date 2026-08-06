@@ -22,8 +22,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:5173', // Vite dev
       'http://localhost:4173', // Vite preview
-      'https://correosclic-frontend-web.vercel.app'
-      // 'https://<dominio-del-frontend-desplegado>',
+      'https://correosclic-frontend-web.vercel.app', // producción
     ],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
