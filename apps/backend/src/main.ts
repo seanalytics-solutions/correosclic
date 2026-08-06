@@ -15,7 +15,19 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  app.enableCors();
+  // Lista blanca fija de orígenes: cualquier otro dominio recibe la respuesta
+  // sin la cabecera Access-Control-Allow-Origin y el navegador bloquea la
+  // llamada. Sin credentials porque el JWT viaja en Authorization, no en cookie.
+  app.enableCors({
+    origin: [
+      'http://localhost:5173', // Vite dev
+      'http://localhost:4173', // Vite preview
+      'https://correosclic-frontend-web.vercel.app'
+      // 'https://<dominio-del-frontend-desplegado>',
+    ],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
