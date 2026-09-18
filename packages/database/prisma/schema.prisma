@@ -31,7 +31,7 @@ model Usuario {
   usuarioRoles           UsuarioRol[]
   vendedor               Vendedor?
   //Se agregaron estas dos lineas -----------------------------------
-  resetPasswordTokenHash String?           @db.VarChar(251)
+  resetPasswordTokenHash String?           @db.VarChar(255)
   resetPasswordExpiresAt DateTime?
 
   @@index([activo])
