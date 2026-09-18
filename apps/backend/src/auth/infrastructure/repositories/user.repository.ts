@@ -1,8 +1,8 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
-import { PrismaService } from "../../../prisma/prisma.service";
-import { EmailAlreadyExistsException } from "../../domain/exceptions/email-already-exists.exception";
+import { PrismaService } from '../../../prisma/prisma.service';
+import { EmailAlreadyExistsException } from '../../domain/exceptions/email-already-exists.exception';
 
 type RegisterClientData = {
   email: string;
@@ -30,12 +30,12 @@ export class UserRepository {
       return await this.prisma.$transaction(async (tx) => {
         const clientRole = await tx.rol.findUnique({
           where: {
-            codigo: "CLIENTE",
+            codigo: 'CLIENTE',
           },
         });
 
         if (!clientRole) {
-          throw new Error("El rol CLIENTE no existe.");
+          throw new Error('El rol CLIENTE no existe.');
         }
 
         const user = await tx.usuario.create({
@@ -67,7 +67,7 @@ export class UserRepository {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        error.code === 'P2002'
       ) {
         throw new EmailAlreadyExistsException();
       }
@@ -117,6 +117,7 @@ export class UserRepository {
       },
     });
   }
+
   async findClientByUserId(userId: string) {
     return this.prisma.cliente.findUnique({
       where: {
@@ -124,6 +125,44 @@ export class UserRepository {
       },
       select: {
         id: true,
+      },
+    });
+  }
+
+  // --- Nuevo: soporte para forgot-password / reset-password ---
+
+  async setResetPasswordToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ) {
+    return this.prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        resetPasswordTokenHash: tokenHash,
+        resetPasswordExpiresAt: expiresAt,
+      },
+    });
+  }
+
+  async findByValidResetPasswordTokenHash(tokenHash: string) {
+    return this.prisma.usuario.findFirst({
+      where: {
+        resetPasswordTokenHash: tokenHash,
+        resetPasswordExpiresAt: {
+          gt: new Date(),
+        },
+      },
+    });
+  }
+
+  async resetPassword(userId: string, passwordHash: string) {
+    return this.prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        resetPasswordTokenHash: null,
+        resetPasswordExpiresAt: null,
       },
     });
   }

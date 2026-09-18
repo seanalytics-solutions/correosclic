@@ -13,11 +13,13 @@ import { JwtTokenService } from './domain/services/jwt-token.service';
 import { TokenService } from './domain/services/token.service';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { MailerModule } from './domain/services/mailer.module';
 
 @Module({
   imports: [
     ConfigModule,
     PassportModule,
+    MailerModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -31,20 +33,18 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   ],
   controllers: [AuthController],
   providers: [
-  AuthService,
-  UserRepository,
-  JwtStrategy,
-  {
-    provide: PasswordService,
-    useClass: BcryptPasswordService,
-  },
-  {
-    provide: TokenService,
-    useClass: JwtTokenService,
-}
-],
-  exports: [AuthService,
+    AuthService,
     UserRepository,
+    JwtStrategy,
+    {
+      provide: PasswordService,
+      useClass: BcryptPasswordService,
+    },
+    {
+      provide: TokenService,
+      useClass: JwtTokenService,
+    }
   ],
+  exports: [AuthService, UserRepository],
 })
 export class AuthModule {}
