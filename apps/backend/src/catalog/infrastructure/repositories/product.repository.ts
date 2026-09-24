@@ -1,96 +1,58 @@
 import { Injectable } from '@nestjs/common';
-
-import {
-  Producto,
-} from '@correosclic/database';
+import { Producto } from '@correosclic/database';
 
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class ProductRepository {
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
-
-  async create(
-    data: {
-      tiendaId: string;
-      categoriaId: string;
-      codigoPublico: string;
-      nombre: string;
-      descripcion?: string;
-      pesoKg: number;
-    },
-  ): Promise<Producto> {
-
+  async create(data: {
+    tiendaId: string;
+    categoriaId: string;
+    codigoPublico: string;
+    nombre: string;
+    descripcion?: string;
+    pesoKg: number;
+  }): Promise<Producto> {
     return this.prisma.producto.create({
-
       data: {
-
         tiendaId: data.tiendaId,
-
         categoriaId: data.categoriaId,
-
         codigoPublico: data.codigoPublico,
-
         nombre: data.nombre,
-
         descripcion: data.descripcion,
-
         pesoKg: data.pesoKg,
-
       },
-
     });
-
   }
 
-  async findById(
-    id: string,
-  ): Promise<Producto | null> {
-
+  async findById(id: string): Promise<Producto | null> {
     return this.prisma.producto.findUnique({
-
       where: {
         id,
       },
-
     });
-
   }
 
-  async findByCodigoPublico(
-    codigoPublico: string,
-  ): Promise<Producto | null> {
-
+  async findByCodigoPublico(codigoPublico: string): Promise<Producto | null> {
     return this.prisma.producto.findUnique({
-
       where: {
         codigoPublico,
       },
-
     });
-
   }
 
   async findByIdAndStoreId(
     productoId: string,
     tiendaId: string,
   ): Promise<Producto | null> {
-
     return this.prisma.producto.findFirst({
-
       where: {
-
         id: productoId,
-
         tiendaId,
-
       },
-
     });
-
   }
 
   /** Productos de una tienda, paginados. El filtro por tienda es el control de ownership. */
@@ -100,7 +62,6 @@ export class ProductRepository {
     take: number;
     search?: string;
   }) {
-
     const where = {
       tiendaId: params.tiendaId,
       ...(params.search && {
@@ -122,7 +83,6 @@ export class ProductRepository {
     };
 
     const [productos, total] = await this.prisma.$transaction([
-
       this.prisma.producto.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -152,18 +112,13 @@ export class ProductRepository {
       }),
 
       this.prisma.producto.count({ where }),
-
     ]);
 
     return { productos, total };
   }
 
   /** Detalle completo de un producto de la tienda, con variantes, stock e imágenes. */
-  async findDetailByIdAndStoreId(
-    productoId: string,
-    tiendaId: string,
-  ) {
-
+  async findDetailByIdAndStoreId(productoId: string, tiendaId: string) {
     return this.prisma.producto.findFirst({
       where: { id: productoId, tiendaId },
       select: {
@@ -192,7 +147,12 @@ export class ProductRepository {
             pesoKg: true,
             activa: true,
             inventario: {
-              select: { stockDisponible: true, stockReservado: true, stockMinimo: true },
+              select: {
+                stockDisponible: true,
+                stockReservado: true,
+                stockMinimo: true,
+                // stockMaximo: true,
+              },
             },
             valores: {
               select: {
@@ -212,11 +172,7 @@ export class ProductRepository {
   }
 
   /** Lo mínimo para decidir si el producto puede publicarse, sin traer el detalle completo. */
-  async findSalabilityByIdAndStoreId(
-    productoId: string,
-    tiendaId: string,
-  ) {
-
+  async findSalabilityByIdAndStoreId(productoId: string, tiendaId: string) {
     return this.prisma.producto.findFirst({
       where: { id: productoId, tiendaId },
       select: {
@@ -237,7 +193,6 @@ export class ProductRepository {
     tiendaId: string,
     publicado: boolean,
   ): Promise<number> {
-
     const result = await this.prisma.producto.updateMany({
       where: { id: productoId, tiendaId },
       data: { publicado },
@@ -245,5 +200,104 @@ export class ProductRepository {
 
     return result.count;
   }
+  /** Catálogo público: productos publicados y activos, sin restricción de tienda. */
+  async findManyPublic(params: {
+    skip: number;
+    take: number;
+    search?: string;
+    categoriaId?: string;
+  }) {
+    const where = {
+      publicado: true,
+      activo: true,
+      tienda: { activa: true },
+      ...(params.categoriaId && { categoriaId: params.categoriaId }),
+      ...(params.search && {
+        nombre: {
+          contains: params.search,
+          mode: 'insensitive' as const,
+        },
+      }),
+    };
+    const [productos, total] = await this.prisma.$transaction([
+      this.prisma.producto.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: params.skip,
+        take: params.take,
+        select: {
+          id: true,
+          codigoPublico: true,
+          nombre: true,
+          createdAt: true,
+          tienda: { select: { id: true, nombre: true } },
+          categoria: { select: { id: true, nombre: true } },
+          imagenes: {
+            where: { esPrincipal: true },
+            take: 1,
+            select: { url: true },
+          },
+          variantes: {
+            where: { activa: true },
+            select: {
+              precio: true,
+              inventario: { select: { stockDisponible: true } },
+            },
+          },
+        },
+      }),
 
+      this.prisma.producto.count({ where }),
+    ]);
+
+    return { productos, total };
+  }
+
+  /** Detalle público de un producto: solo si está publicado y activo. */
+  async findPublicDetailById(productoId: string) {
+    return this.prisma.producto.findFirst({
+      where: {
+        id: productoId,
+        publicado: true,
+        activo: true,
+        tienda: { activa: true },
+      },
+      select: {
+        id: true,
+        codigoPublico: true,
+        nombre: true,
+        descripcion: true,
+        createdAt: true,
+        tienda: { select: { id: true, nombre: true } },
+        categoria: { select: { id: true, nombre: true } },
+        imagenes: {
+          orderBy: { orden: 'asc' },
+          select: { id: true, url: true, orden: true, esPrincipal: true },
+        },
+        variantes: {
+          where: { activa: true },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            sku: true,
+            precio: true,
+            inventario: {
+              select: { stockDisponible: true },
+            },
+            valores: {
+              select: {
+                valorAtributo: {
+                  select: {
+                    id: true,
+                    valor: true,
+                    atributo: { select: { id: true, nombre: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
 }
