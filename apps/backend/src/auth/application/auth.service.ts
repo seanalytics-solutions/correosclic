@@ -1,6 +1,7 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { SessionService } from '../domain/services/session.service';
+import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import * as crypto from 'crypto';
-
 import { PrismaService } from '../../prisma/prisma.service';
 import { PasswordService } from '../domain/services/password.service';
 import { MailerService } from '../domain/services/mailer.service';
@@ -16,6 +17,10 @@ import { TokenService } from '../domain/services/token.service';
 import { LoginDto } from '../dto/login.dto';
 
 const RESET_TOKEN_EXPIRATION_MINUTES = 15;
+type SessionMetadata = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
 
 @Injectable()
 export class AuthService {
@@ -25,6 +30,7 @@ export class AuthService {
     private readonly userRepository: UserRepository,
     private readonly tokenService: TokenService,
     private readonly mailerService: MailerService,
+    private readonly sessionService: SessionService,
   ) {}
 
   async ping() {
@@ -38,14 +44,14 @@ export class AuthService {
   //validar contraseña y confirmacion de contraseña, si no coinciden lanzar excepcion
   async register(
     dto: RegisterDto,
+    metadata: SessionMetadata = {},
   ): Promise<RegisterResponseDto> {
     if (dto.password !== dto.confirmPassword) {
       throw new PasswordMismatchException();
     }
+
     //Buscar si el correo electrónico ya existe en la base de datos, si existe lanzar excepcion
-    const existingUser = await this.userRepository.findByEmail(
-      dto.email,
-    );
+    const existingUser = await this.userRepository.findByEmail(dto.email);
 
     if (existingUser) {
       throw new EmailAlreadyExistsException();
@@ -65,10 +71,15 @@ export class AuthService {
       sub: user.id,
       email: user.email,
     });
+    const refreshToken = await this.sessionService.createSession(
+      user.id,
+      metadata,
+    );
     const roles = await this.userRepository.getRoles(user.id);
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -79,7 +90,7 @@ export class AuthService {
       },
     };
   }
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, metadata: SessionMetadata = {}) {
     const user = await this.userRepository.findByEmailWithRoles(dto.email);
 
     if (!user || !user.passwordHash) {
@@ -99,9 +110,14 @@ export class AuthService {
       sub: user.id,
       email: user.email,
     });
+    const refreshToken = await this.sessionService.createSession(
+      user.id,
+      metadata,
+    );
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -175,5 +191,32 @@ export class AuthService {
     await this.userRepository.resetPassword(user.id, passwordHash);
 
     return { message: 'Contraseña actualizada correctamente.' };
+  }
+
+  // --- Nuevo: refresh token / logout ---
+  async refresh(
+    dto: RefreshTokenDto,
+    metadata: SessionMetadata = {},
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const session = await this.sessionService.rotateSession(
+      dto.refreshToken,
+      metadata,
+    );
+
+    const accessToken = await this.tokenService.generateAccessToken({
+      sub: session.userId,
+      email: session.email,
+    });
+
+    return {
+      accessToken,
+      refreshToken: session.refreshToken,
+    };
+  }
+
+  async logout(dto: RefreshTokenDto): Promise<{ message: string }> {
+    await this.sessionService.revokeSession(dto.refreshToken);
+
+    return { message: 'Sesión cerrada correctamente.' };
   }
 }

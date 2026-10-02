@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
+import { SessionService } from './domain/services/session.service';
+import { SessionRepository } from './infrastructure/repositories/session.repository';
+import { ACCESS_TOKEN_EXPIRES_IN } from './constants/auth.constants';
+
 import { AuthController } from './controllers/auth.controller';
 import { AuthService } from './application/auth.service';
 
@@ -26,7 +30,7 @@ import { MailerModule } from './domain/services/mailer.module';
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: '1d',
+          expiresIn: ACCESS_TOKEN_EXPIRES_IN,
         },
       }),
     }),
@@ -35,6 +39,8 @@ import { MailerModule } from './domain/services/mailer.module';
   providers: [
     AuthService,
     UserRepository,
+    SessionRepository,
+    SessionService,
     JwtStrategy,
     {
       provide: PasswordService,
@@ -43,7 +49,7 @@ import { MailerModule } from './domain/services/mailer.module';
     {
       provide: TokenService,
       useClass: JwtTokenService,
-    }
+    },
   ],
   exports: [AuthService, UserRepository],
 })
