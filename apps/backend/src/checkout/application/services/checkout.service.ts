@@ -20,10 +20,7 @@ import { ShippingCalculatorService } from './shipping-calculator.service';
 import { GeoCoordinates } from '../../../shared/geo/haversine-distance.calculator';
 import { ShippingCalculationItem } from '../interfaces/shipping-calculation.interface';
 
-import {
-  roundCurrency,
-  roundWeight,
-} from '../../domain/utils/rounding.util';
+import { roundCurrency, roundWeight } from '../../domain/utils/rounding.util';
 
 import { EmptyCheckoutException } from '../../domain/exceptions/empty-checkout.exception';
 import { CustomerNotFoundException } from '../../domain/exceptions/customer-not-found.exception';
@@ -46,8 +43,7 @@ export class CheckoutService {
   ): Promise<CheckoutSummaryDto> {
     const client = await this.getClientByUserId(userId);
 
-    const cart =
-      await this.repository.findCartForCheckout(client.id);
+    const cart = await this.repository.findCartForCheckout(client.id);
 
     if (!cart || cart.items.length === 0) {
       throw new EmptyCheckoutException();
@@ -55,9 +51,7 @@ export class CheckoutService {
 
     const warnings = this.validateStock(cart.items);
 
-    const items = cart.items.map((item) =>
-      this.toItemDto(item),
-    );
+    const items = cart.items.map((item) => this.toItemDto(item));
 
     const subtotal = this.totals.calculateSubtotal(
       cart.items.map((item) => ({
@@ -68,9 +62,7 @@ export class CheckoutService {
 
     const totalWeightKg = this.totals.calculateWeight(
       cart.items.map((item) => ({
-        pesoKg: Number(
-          item.productoVariante.pesoKg ?? 0,
-        ),
+        pesoKg: Number(item.productoVariante.pesoKg ?? 0),
         cantidad: item.cantidad,
       })),
     );
@@ -82,39 +74,27 @@ export class CheckoutService {
     );
 
     const { direccionId: resolvedDireccionId, ...destination } =
-      await this.getDeliveryDestination(
-        client.id,
-        direccionId,
-      );
+      await this.getDeliveryDestination(client.id, direccionId);
 
-    const shippingItems = this.buildShippingItems(
-      cart.items,
+    const shippingItems = this.buildShippingItems(cart.items);
+
+    const shippingResult = await this.shippingCalculator.calculate(
+      shippingItems,
+      destination,
     );
 
-    const shippingResult =
-      await this.shippingCalculator.calculate(
-        shippingItems,
-        destination,
-      );
+    const total = roundCurrency(subtotal + shippingResult.costoEnvio);
 
-    const total = roundCurrency(
-      subtotal + shippingResult.costoEnvio,
-    );
+    const [ivaPercentage, commissionPercentage] = await Promise.all([
+      this.systemConfigRepository.getNumber(
+        ConfiguracionSistemaKey.IVA_PERCENTAGE,
+      ),
+      this.systemConfigRepository.getNumber(
+        ConfiguracionSistemaKey.MARKETPLACE_COMMISSION,
+      ),
+    ]);
 
-    const [ivaPercentage, commissionPercentage] =
-      await Promise.all([
-        this.systemConfigRepository.getNumber(
-          ConfiguracionSistemaKey.IVA_PERCENTAGE,
-        ),
-        this.systemConfigRepository.getNumber(
-          ConfiguracionSistemaKey.MARKETPLACE_COMMISSION,
-        ),
-      ]);
-
-    const ivaIncluido = this.totals.extractTax(
-      total,
-      ivaPercentage,
-    );
+    const ivaIncluido = this.totals.extractTax(total, ivaPercentage);
 
     const comisionMarketplace = this.totals.calculateCommission(
       subtotal,
@@ -137,62 +117,42 @@ export class CheckoutService {
     };
   }
 
-  async listAddresses(
-    userId: string,
-  ): Promise<CheckoutAddressDto[]> {
+  async listAddresses(userId: string): Promise<CheckoutAddressDto[]> {
     const client = await this.getClientByUserId(userId);
 
-    const addresses =
-      await this.repository.findAddressesByClientId(
-        client.id,
-      );
+    const addresses = await this.repository.findAddressesByClientId(client.id);
 
-    return addresses.map((address) =>
-      this.toAddressDto(address),
-    );
+    return addresses.map((address) => this.toAddressDto(address));
   }
 
-  private toAddressDto(
-    address: CheckoutAddressRecord,
-  ): CheckoutAddressDto {
+  private toAddressDto(address: CheckoutAddressRecord): CheckoutAddressDto {
     return {
       id: address.direccion.id,
       alias: address.direccion.alias,
-      direccionFormateada:
-        address.direccion.direccionFormateada,
+      direccionFormateada: address.direccion.direccionFormateada,
       esPrincipal: address.esPrincipal,
     };
   }
 
-  private toItemDto(
-    item: CheckoutCartItem,
-  ): CheckoutItemDto {
-    const precioUnitario = Number(
-      item.productoVariante.precio,
-    );
+  private toItemDto(item: CheckoutCartItem): CheckoutItemDto {
+    const precioUnitario = Number(item.productoVariante.precio);
 
-    const pesoUnitarioKg = Number(
-      item.productoVariante.pesoKg ?? 0,
-    );
+    const pesoUnitarioKg = Number(item.productoVariante.pesoKg ?? 0);
 
     return {
       productoId: item.productoVariante.producto.id,
 
       productoVarianteId: item.productoVariante.id,
 
-      vendedorId:
-        item.productoVariante.producto.tienda.vendedorId,
+      vendedorId: item.productoVariante.producto.tienda.vendedorId,
 
-      nombreTienda:
-        item.productoVariante.producto.tienda.nombre,
+      nombreTienda: item.productoVariante.producto.tienda.nombre,
 
       nombre: item.productoVariante.producto.nombre,
 
       sku: item.productoVariante.sku,
 
-      imagen:
-        item.productoVariante.producto.imagenes[0]?.url ??
-        null,
+      imagen: item.productoVariante.producto.imagenes[0]?.url ?? null,
 
       atributos: item.productoVariante.valores.map(
         (valor) => valor.valorAtributo.valor,
@@ -202,25 +162,18 @@ export class CheckoutService {
 
       precioUnitario,
 
-      subtotal: roundCurrency(
-        precioUnitario * item.cantidad,
-      ),
+      subtotal: roundCurrency(precioUnitario * item.cantidad),
 
-      pesoKg: roundWeight(
-        pesoUnitarioKg * item.cantidad,
-      ),
+      pesoKg: roundWeight(pesoUnitarioKg * item.cantidad),
     };
   }
 
-  private validateStock(
-    items: CheckoutCartItem[],
-  ): string[] {
+  private validateStock(items: CheckoutCartItem[]): string[] {
     const warnings: string[] = [];
 
     for (const item of items) {
       const stockDisponible =
-        item.productoVariante.inventario
-          ?.stockDisponible ?? 0;
+        item.productoVariante.inventario?.stockDisponible ?? 0;
 
       if (item.cantidad > stockDisponible) {
         warnings.push(
@@ -236,24 +189,19 @@ export class CheckoutService {
     items: CheckoutCartItem[],
   ): ShippingCalculationItem[] {
     return items.map((item) => {
-      const vendedorId =
-        item.productoVariante.producto.tienda.vendedorId;
+      const vendedorId = item.productoVariante.producto.tienda.vendedorId;
 
-      const nombreTienda =
-        item.productoVariante.producto.tienda.nombre;
+      const nombreTienda = item.productoVariante.producto.tienda.nombre;
 
       const estadoOperacion =
-        item.productoVariante.producto.tienda.vendedor
-          .estadoOperacion;
+        item.productoVariante.producto.tienda.vendedor.estadoOperacion;
 
       if (
         !estadoOperacion ||
         estadoOperacion.latitud === null ||
         estadoOperacion.longitud === null
       ) {
-        throw new VendorOperatingStateNotFoundException(
-          vendedorId,
-        );
+        throw new VendorOperatingStateNotFoundException(vendedorId);
       }
 
       return {
@@ -263,10 +211,20 @@ export class CheckoutService {
           latitud: Number(estadoOperacion.latitud),
           longitud: Number(estadoOperacion.longitud),
         },
-        pesoKg: Number(
-          item.productoVariante.pesoKg ?? 0,
-        ),
+        pesoKg: Number(item.productoVariante.pesoKg ?? 0),
         cantidad: item.cantidad,
+        largoCm:
+          item.productoVariante.producto.largoCm != null
+            ? Number(item.productoVariante.producto.largoCm)
+            : undefined,
+        anchoCm:
+          item.productoVariante.producto.anchoCm != null
+            ? Number(item.productoVariante.producto.anchoCm)
+            : undefined,
+        altoCm:
+          item.productoVariante.producto.altoCm != null
+            ? Number(item.productoVariante.producto.altoCm)
+            : undefined,
       };
     });
   }
@@ -276,13 +234,8 @@ export class CheckoutService {
     direccionId?: string,
   ): Promise<GeoCoordinates & { direccionId: string }> {
     const direccionCliente = direccionId
-      ? await this.repository.findDeliveryAddressById(
-          clienteId,
-          direccionId,
-        )
-      : await this.repository.findPrincipalDeliveryAddress(
-          clienteId,
-        );
+      ? await this.repository.findDeliveryAddressById(clienteId, direccionId)
+      : await this.repository.findPrincipalDeliveryAddress(clienteId);
 
     if (!direccionCliente) {
       throw new DeliveryAddressNotFoundException(
@@ -293,10 +246,8 @@ export class CheckoutService {
     }
 
     if (
-      direccionCliente.direccion.codigoPostal.latitud ===
-        null ||
-      direccionCliente.direccion.codigoPostal.longitud ===
-        null
+      direccionCliente.direccion.codigoPostal.latitud === null ||
+      direccionCliente.direccion.codigoPostal.longitud === null
     ) {
       throw new DeliveryAddressNotFoundException(
         'La dirección de entrega no tiene coordenadas registradas.',
@@ -305,20 +256,13 @@ export class CheckoutService {
 
     return {
       direccionId: direccionCliente.direccion.id,
-      latitud: Number(
-        direccionCliente.direccion.codigoPostal.latitud,
-      ),
-      longitud: Number(
-        direccionCliente.direccion.codigoPostal.longitud,
-      ),
+      latitud: Number(direccionCliente.direccion.codigoPostal.latitud),
+      longitud: Number(direccionCliente.direccion.codigoPostal.longitud),
     };
   }
 
   private async getClientByUserId(userId: string) {
-    const client =
-      await this.userRepository.findClientByUserId(
-        userId,
-      );
+    const client = await this.userRepository.findClientByUserId(userId);
 
     if (!client) {
       throw new CustomerNotFoundException();

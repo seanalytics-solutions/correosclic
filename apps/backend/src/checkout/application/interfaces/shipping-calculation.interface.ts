@@ -6,6 +6,9 @@ export interface ShippingCalculationItem {
   estadoOperacion: GeoCoordinates;
   pesoKg: number;
   cantidad: number;
+  largoCm?: number;
+  anchoCm?: number;
+  altoCm?: number;
 }
 
 export interface VendorShippingQuote {

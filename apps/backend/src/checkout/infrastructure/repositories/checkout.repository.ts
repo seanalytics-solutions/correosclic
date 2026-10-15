@@ -4,9 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class CheckoutRepository {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findCartForCheckout(clienteId: string) {
     return this.prisma.carrito.findUnique({
@@ -38,6 +36,9 @@ export class CheckoutRepository {
                   select: {
                     id: true,
                     nombre: true,
+                    largoCm: true,
+                    anchoCm: true,
+                    altoCm: true,
 
                     imagenes: {
                       where: {
@@ -113,10 +114,7 @@ export class CheckoutRepository {
     });
   }
 
-  async findDeliveryAddressById(
-    clienteId: string,
-    direccionId: string,
-  ) {
+  async findDeliveryAddressById(clienteId: string, direccionId: string) {
     return this.prisma.direccionCliente.findFirst({
       where: {
         clienteId,
@@ -225,8 +223,7 @@ export type CheckoutCart = Awaited<
   ReturnType<CheckoutRepository['findCartForCheckout']>
 >;
 export type CheckoutCartAggregate = NonNullable<CheckoutCart>;
-export type CheckoutCartItem =
-  CheckoutCartAggregate['items'][number];
+export type CheckoutCartItem = CheckoutCartAggregate['items'][number];
 
 export type CheckoutAddressRecord = Awaited<
   ReturnType<CheckoutRepository['findAddressesByClientId']>

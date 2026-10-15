@@ -13,10 +13,7 @@ import type { ShippingAggregationStrategy } from '../../domain/services/shipping
 import { ShippingZoneNotFoundException } from '../../domain/exceptions/shipping-zone-not-found.exception';
 import { ShippingRateNotFoundException } from '../../domain/exceptions/shipping-rate-not-found.exception';
 
-import {
-  roundDistance,
-  roundWeight,
-} from '../../domain/utils/rounding.util';
+import { roundDistance, roundWeight } from '../../domain/utils/rounding.util';
 
 import {
   ShippingCalculationItem,
@@ -29,6 +26,7 @@ interface VendorShipment {
   nombreTienda: string;
   estadoOperacion: GeoCoordinates;
   pesoTotalKg: number;
+  volumenTotalCm3: number; // 👈 NUEVO
 }
 
 const PERCENTAGE_DIVISOR = 100;
@@ -50,23 +48,23 @@ export class ShippingCalculatorService {
   ): Promise<ShippingCalculationResult> {
     const vendorShipments = this.groupByVendor(items);
 
+    const volumetricFactor = await this.getVolumetricFactor(); // 👈 NUEVO
+
     const cotizaciones = await Promise.all(
-      vendorShipments.map((shipment) =>
-        this.quoteVendor(shipment, destination),
+      vendorShipments.map(
+        (shipment) => this.quoteVendor(shipment, destination, volumetricFactor), // 👈 CAMBIO
       ),
     );
 
-    const additionalVendorFactor =
-      await this.getAdditionalVendorFactor();
+    const additionalVendorFactor = await this.getAdditionalVendorFactor();
 
-    const { total, contribuciones } =
-      this.aggregationStrategy.aggregate(
-        cotizaciones.map((cotizacion) => ({
-          vendedorId: cotizacion.vendedorId,
-          tarifa: cotizacion.tarifa,
-        })),
-        additionalVendorFactor,
-      );
+    const { total, contribuciones } = this.aggregationStrategy.aggregate(
+      cotizaciones.map((cotizacion) => ({
+        vendedorId: cotizacion.vendedorId,
+        tarifa: cotizacion.tarifa,
+      })),
+      additionalVendorFactor,
+    );
 
     const contribucionesPorVendedor = new Map(
       contribuciones.map((contribucion) => [
@@ -75,8 +73,8 @@ export class ShippingCalculatorService {
       ]),
     );
 
-    const cotizacionesPorVendedor: VendorShippingQuote[] =
-      cotizaciones.map((cotizacion) => {
+    const cotizacionesPorVendedor: VendorShippingQuote[] = cotizaciones.map(
+      (cotizacion) => {
         const contribucion = contribucionesPorVendedor.get(
           cotizacion.vendedorId,
         );
@@ -88,7 +86,8 @@ export class ShippingCalculatorService {
             ? undefined
             : contribucion?.montoAplicado,
         };
-      });
+      },
+    );
 
     return {
       costoEnvio: total,
@@ -99,64 +98,71 @@ export class ShippingCalculatorService {
   private async quoteVendor(
     shipment: VendorShipment,
     destination: GeoCoordinates,
-  ): Promise<
-    Omit<VendorShippingQuote, 'esTarifaBase' | 'recargoAplicado'>
-  > {
+    volumetricFactor: number, // 👈 NUEVO
+  ): Promise<Omit<VendorShippingQuote, 'esTarifaBase' | 'recargoAplicado'>> {
     const distanciaKm = this.distanceCalculator.calculateKm(
       shipment.estadoOperacion,
       destination,
     );
 
-    const zona =
-      await this.checkoutRepository.findZonaByDistancia(
-        distanciaKm,
-      );
+    // 👈 NUEVO: si el factor no es válido, se cobra solo por peso real (como antes)
+    const pesoVolumetricoKg =
+      volumetricFactor > 0 ? shipment.volumenTotalCm3 / volumetricFactor : 0;
+
+    const pesoCobrableKg = Math.max(shipment.pesoTotalKg, pesoVolumetricoKg); // 👈 NUEVO
+
+    const zona = await this.checkoutRepository.findZonaByDistancia(distanciaKm);
 
     if (!zona) {
       throw new ShippingZoneNotFoundException(distanciaKm);
     }
 
-    const tarifa =
-      await this.checkoutRepository.findTarifaByZonaYPeso(
-        zona.id,
-        shipment.pesoTotalKg,
-      );
+    const tarifa = await this.checkoutRepository.findTarifaByZonaYPeso(
+      zona.id,
+      pesoCobrableKg, // 👈 CAMBIO
+    );
 
     if (!tarifa) {
       throw new ShippingRateNotFoundException(
         zona.codigo,
-        shipment.pesoTotalKg,
+        pesoCobrableKg, // 👈 CAMBIO
       );
     }
 
     return {
       vendedorId: shipment.vendedorId,
       nombreTienda: shipment.nombreTienda,
-      pesoKg: roundWeight(shipment.pesoTotalKg),
+      pesoKg: roundWeight(shipment.pesoTotalKg), // se conserva: peso REAL
       distanciaKm: roundDistance(distanciaKm),
       zonaTarifariaCodigo: zona.codigo,
       tarifa: Number(tarifa.precioConIva),
     };
   }
 
-  private groupByVendor(
-    items: ShippingCalculationItem[],
-  ): VendorShipment[] {
+  private groupByVendor(items: ShippingCalculationItem[]): VendorShipment[] {
     const shipmentsByVendor = new Map<string, VendorShipment>();
 
     for (const item of items) {
       const pesoItem = item.pesoKg * item.cantidad;
 
+      // 👈 NUEVO: si falta alguna medida, el volumen es 0
+      const volumenItem =
+        item.largoCm != null && item.anchoCm != null && item.altoCm != null
+          ? item.largoCm * item.anchoCm * item.altoCm * item.cantidad
+          : 0;
+
       const existing = shipmentsByVendor.get(item.vendedorId);
 
       if (existing) {
         existing.pesoTotalKg += pesoItem;
+        existing.volumenTotalCm3 += volumenItem; // 👈 NUEVO
       } else {
         shipmentsByVendor.set(item.vendedorId, {
           vendedorId: item.vendedorId,
           nombreTienda: item.nombreTienda,
           estadoOperacion: item.estadoOperacion,
           pesoTotalKg: pesoItem,
+          volumenTotalCm3: volumenItem, // 👈 NUEVO
         });
       }
     }
@@ -165,11 +171,18 @@ export class ShippingCalculatorService {
   }
 
   private async getAdditionalVendorFactor(): Promise<number> {
-    const porcentaje =
-      await this.systemConfigRepository.getNumber(
-        ConfiguracionSistemaKey.ADDITIONAL_VENDOR_SHIPPING_FACTOR,
-      );
+    const porcentaje = await this.systemConfigRepository.getNumber(
+      ConfiguracionSistemaKey.ADDITIONAL_VENDOR_SHIPPING_FACTOR,
+    );
 
     return porcentaje / PERCENTAGE_DIVISOR;
+  }
+
+  private async getVolumetricFactor(): Promise<number> {
+    const factor = await this.systemConfigRepository.getNumber(
+      ConfiguracionSistemaKey.VOLUMETRIC_FACTOR,
+    );
+
+    return factor;
   }
 }
