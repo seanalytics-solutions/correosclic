@@ -12,8 +12,7 @@ import { AuthService } from '../application/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
-
-type ResetPasswordDto = Parameters<AuthService['resetPassword']>[0];
+import { ResetPasswordDto } from '../dto/reset-password.dto';
 
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
