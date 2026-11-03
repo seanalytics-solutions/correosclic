@@ -18,13 +18,12 @@ import { ProductImageMapper } from './product-image/mappers/product-image.mapper
 import { ProductImageRepository } from './product-image/repositories/product-image.repository';
 import { ProductPublicationPolicy } from './domain/services/product-publication.policy';
 import { StorageModule } from '../storage/storage.module';
-
-
+import { PublicProductController } from './controllers/public-product.controller';
 
 @Module({
   imports: [PrismaModule, StorageModule],
-  controllers: [CategoryController, ProductController],
-  
+  /*Se agrego el PublicProductController */
+  controllers: [CategoryController, ProductController, PublicProductController],
   providers: [
     CategoryService,
     ProductService,

@@ -1,8 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-
 import { ProductRepository } from '../../infrastructure/repositories/product.repository';
 import { CategoryRepository } from '../../infrastructure/repositories/category.repository';
-
 import { CreateProductDto } from '../dto/create-product.dto';
 import { ProductResponseDto } from '../dto/product-response.dto';
 import { CategoryNotFoundException } from 'src/catalog/domain/exceptions/category-not-found.exception';
@@ -11,12 +9,12 @@ import { ProductNotFoundException } from '../../domain/exceptions/product-not-fo
 import { StoreNotFoundException } from '../../domain/exceptions/store-not-found.exception';
 import { ProductNotPublishableException } from '../../domain/exceptions/product-not-publishable.exception';
 import { ProductPublicationPolicy } from '../../domain/services/product-publication.policy';
+import { SellerProductListResponseDto } from '../dto/seller-product-list-response.dto';
+import { SellerProductDetailResponseDto } from '../dto/seller-product-detail-response.dto';
 import {
-  SellerProductListResponseDto,
-} from '../dto/seller-product-list-response.dto';
-import {
-  SellerProductDetailResponseDto,
-} from '../dto/seller-product-detail-response.dto';
+  PublicProductListResponseDto,
+  PublicProductDetailResponseDto,
+} from '../dto/public-product-response.dto';
 
 @Injectable()
 export class ProductService {
@@ -32,9 +30,7 @@ export class ProductService {
    * de ownership de este servicio.
    */
   private async findOwnStoreOrThrow(userId: string) {
-
-    const store =
-      await this.sellerRepository.findStoreByUserId(userId);
+    const store = await this.sellerRepository.findStoreByUserId(userId);
 
     if (!store) {
       throw new StoreNotFoundException();
@@ -50,23 +46,22 @@ export class ProductService {
     limit: number,
     search?: string,
   ): Promise<SellerProductListResponseDto> {
-
     const store = await this.findOwnStoreOrThrow(userId);
 
     const pagina = Math.max(1, Math.trunc(page) || 1);
     const tamano = Math.min(100, Math.max(1, Math.trunc(limit) || 20));
 
-    const { productos, total } =
-      await this.productRepository.findManyByStoreId({
+    const { productos, total } = await this.productRepository.findManyByStoreId(
+      {
         tiendaId: store.id,
         skip: (pagina - 1) * tamano,
         take: tamano,
         search,
-      });
+      },
+    );
 
     return {
       products: productos.map((producto) => {
-
         const precios = producto.variantes.map((variante) =>
           Number(variante.precio),
         );
@@ -104,14 +99,12 @@ export class ProductService {
     userId: string,
     productId: string,
   ): Promise<SellerProductDetailResponseDto> {
-
     const store = await this.findOwnStoreOrThrow(userId);
 
-    const producto =
-      await this.productRepository.findDetailByIdAndStoreId(
-        productId,
-        store.id,
-      );
+    const producto = await this.productRepository.findDetailByIdAndStoreId(
+      productId,
+      store.id,
+    );
 
     if (!producto) {
       throw new ProductNotFoundException();
@@ -130,7 +123,6 @@ export class ProductService {
       publicado: producto.publicado,
       createdAt: producto.createdAt,
       categoria: producto.categoria,
-
       imagenes: producto.imagenes.map((imagen) => ({
         id: imagen.id,
         url: imagen.url,
@@ -156,6 +148,86 @@ export class ProductService {
       })),
     };
   }
+  /** Catálogo público, paginado. `limit` se acota a 100 como en Mine. */
+  async findPublic(
+    page: number,
+    limit: number,
+    search?: string,
+    categoriaId?: string,
+  ): Promise<PublicProductListResponseDto> {
+    const pagina = Math.max(1, Math.trunc(page) || 1);
+    const tamano = Math.min(100, Math.max(1, Math.trunc(limit) || 20));
+
+    const { productos, total } = await this.productRepository.findManyPublic({
+      skip: (pagina - 1) * tamano,
+      take: tamano,
+      search,
+      categoriaId,
+    });
+
+    return {
+      products: productos.map((producto) => {
+        const variantesConStock = producto.variantes.filter(
+          (variante) => (variante.inventario?.stockDisponible ?? 0) > 0,
+        );
+
+        const precios = variantesConStock.map((variante) =>
+          Number(variante.precio),
+        );
+
+        return {
+          id: producto.id,
+          codigoPublico: producto.codigoPublico,
+          nombre: producto.nombre,
+          categoria: producto.categoria,
+          tienda: producto.tienda,
+          imagenPrincipalUrl: producto.imagenes[0]?.url ?? null,
+          precioDesde: precios.length > 0 ? Math.min(...precios) : null,
+          disponible: precios.length > 0,
+        };
+      }),
+
+      page: pagina,
+      limit: tamano,
+      total,
+      totalPages: Math.ceil(total / tamano),
+    };
+  }
+
+  /** Detalle público de un producto. Lanza 404 si no existe, no está publicado o no está activo. */
+  async findPublicById(
+    productId: string,
+  ): Promise<PublicProductDetailResponseDto> {
+    const producto = await this.productRepository.findPublicDetailById(productId);
+    if (!producto) {
+      throw new ProductNotFoundException();
+    }
+
+    return {
+      id: producto.id,
+      codigoPublico: producto.codigoPublico,
+      nombre: producto.nombre,
+      descripcion: producto.descripcion,
+      categoria: producto.categoria,
+      tienda: producto.tienda,
+      imagenes: producto.imagenes.map((imagen) => ({
+        id: imagen.id,
+        url: imagen.url,
+        esPrincipal: imagen.esPrincipal,
+      })),
+
+      variantes: producto.variantes.map((variante) => ({
+        id: variante.id,
+        sku: variante.sku,
+        precio: Number(variante.precio),
+        stockDisponible: variante.inventario?.stockDisponible ?? 0,
+        atributos: variante.valores.map((valor) => ({
+          atributo: valor.valorAtributo.atributo.nombre,
+          valor: valor.valorAtributo.valor,
+        })),
+      })),
+    };
+  }
 
   /**
    * Publica o retira de publicación un producto propio.
@@ -173,19 +245,17 @@ export class ProductService {
     productId: string,
     publicado: boolean,
   ): Promise<SellerProductDetailResponseDto> {
-
     const store = await this.findOwnStoreOrThrow(userId);
 
     if (publicado) {
       await this.assertPublishable(productId, store.id);
     }
 
-    const actualizados =
-      await this.productRepository.updatePublication(
-        productId,
-        store.id,
-        publicado,
-      );
+    const actualizados = await this.productRepository.updatePublication(
+      productId,
+      store.id,
+      publicado,
+    );
 
     if (actualizados === 0) {
       throw new ProductNotFoundException();
@@ -198,12 +268,10 @@ export class ProductService {
     productId: string,
     tiendaId: string,
   ): Promise<void> {
-
-    const producto =
-      await this.productRepository.findSalabilityByIdAndStoreId(
-        productId,
-        tiendaId,
-      );
+    const producto = await this.productRepository.findSalabilityByIdAndStoreId(
+      productId,
+      tiendaId,
+    );
 
     // Se comprueba aquí y no tras el update para que un producto inexistente o
     // ajeno siga respondiendo 404, no 409.
@@ -214,8 +282,7 @@ export class ProductService {
     const resultado = this.publicationPolicy.puedePublicarse(
       producto.variantes.map((variante) => ({
         activa: variante.activa,
-        stockDisponible:
-          variante.inventario?.stockDisponible ?? null,
+        stockDisponible: variante.inventario?.stockDisponible ?? null,
       })),
     );
 
@@ -225,32 +292,24 @@ export class ProductService {
   }
 
   async create(
-  userId: string,
-  dto: CreateProductDto,
-): Promise<ProductResponseDto> {
+    userId: string,
+    dto: CreateProductDto,
+  ): Promise<ProductResponseDto> {
+    const store = await this.sellerRepository.findStoreByUserId(userId);
 
-  const store =
-    await this.sellerRepository.findStoreByUserId(
-      userId,
-    );
+    if (!store) {
+      throw new NotFoundException(
+        'El vendedor no tiene una tienda registrada.',
+      );
+    }
 
-  if (!store) {
-    throw new NotFoundException(
-      'El vendedor no tiene una tienda registrada.',
-    );
-  }
+    const category = await this.categoryRepository.findById(dto.categoriaId);
 
-  const category =
-    await this.categoryRepository.findById(
-      dto.categoriaId,
-    );
+    if (!category) {
+      throw new CategoryNotFoundException();
+    }
 
-  if (!category) {
-    throw new CategoryNotFoundException();
-  }
-
-  const product =
-    await this.productRepository.create({
+    const product = await this.productRepository.create({
       tiendaId: store.id,
       categoriaId: dto.categoriaId,
       codigoPublico: this.generateProductCode(),
@@ -258,26 +317,21 @@ export class ProductService {
       descripcion: dto.descripcion,
       pesoKg: dto.pesoKg,
     });
-    
 
-  return {
-  id: product.id,
-  codigoPublico: product.codigoPublico,
-  nombre: product.nombre,
-  descripcion: product.descripcion ?? undefined,
-  pesoKg: Number(product.pesoKg),
-  activo: product.activo,
-  publicado: product.publicado,
-  createdAt: product.createdAt,
-};
-}
-private generateProductCode(): string {
+    return {
+      id: product.id,
+      codigoPublico: product.codigoPublico,
+      nombre: product.nombre,
+      descripcion: product.descripcion ?? undefined,
+      pesoKg: Number(product.pesoKg),
+      activo: product.activo,
+      publicado: product.publicado,
+      createdAt: product.createdAt,
+    };
+  }
+  private generateProductCode(): string {
+    const random = Math.floor(100000 + Math.random() * 900000); // Genera un número aleatorio de 6 dígitos
 
-  const random = Math.floor(
-    100000 + Math.random() * 900000,
-  );
-
-  return `CCP-${random}`;
-}
-
+    return `CCP-${random}`;
+  }
 }

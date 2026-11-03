@@ -58,7 +58,8 @@ export interface RecordDeliveryAttemptParams {
 }
 
 const DESCRIPCION_POR_ESTADO: Record<EstadoEnvio, string> = {
-  [EstadoEnvio.PENDIENTE_RECEPCION]: 'Guía generada, en espera de recepción en sucursal.',
+  [EstadoEnvio.PENDIENTE_RECEPCION]:
+    'Guía generada, en espera de recepción en sucursal.',
   [EstadoEnvio.RECIBIDO_SUCURSAL]: 'Paquete recibido en sucursal de origen.',
   [EstadoEnvio.CLASIFICADO]: 'Paquete clasificado para su siguiente etapa.',
   [EstadoEnvio.EN_TRANSITO]: 'Paquete en tránsito hacia la sucursal destino.',
@@ -86,7 +87,9 @@ function describirEstado(estado: EstadoEnvio, observaciones?: string): string {
   const esDesenlaceAdverso =
     estado === EstadoEnvio.DANADO || estado === EstadoEnvio.CANCELADO;
 
-  return esDesenlaceAdverso && observaciones ? `${base} Motivo: ${observaciones}` : base;
+  return esDesenlaceAdverso && observaciones
+    ? `${base} Motivo: ${observaciones}`
+    : base;
 }
 
 @Injectable()
@@ -130,7 +133,29 @@ export class ShipmentRepository {
       include: {
         pedidoVendedor: {
           include: {
-            pedido: { select: { id: true, clienteId: true } },
+            // CAMBIO: también la dirección de entrega (para el repartidor y el cliente)
+            pedido: {
+              select: {
+                id: true,
+                clienteId: true,
+                direccionEntrega: {
+                  select: {
+                    alias: true,
+                    calle: true,
+                    numeroExterior: true,
+                    numeroInterior: true,
+                    colonia: true,
+                    referencias: true,
+                    direccionFormateada: true,
+                    latitud: true,
+                    longitud: true,
+                    codigoPostal: { select: { codigo: true } },
+                    ciudad: { select: { nombre: true } },
+                    estadoProvincia: { select: { nombre: true } },
+                  },
+                },
+              },
+            },
           },
         },
         sucursalOrigen: { select: { id: true, nombre: true } },
@@ -376,8 +401,7 @@ export class ShipmentRepository {
         data: {
           envioId: params.envioId,
           estado: EstadoEnvio.EN_SUCURSAL_DESTINO,
-          descripcion:
-            DESCRIPCION_POR_ESTADO[EstadoEnvio.EN_SUCURSAL_DESTINO],
+          descripcion: DESCRIPCION_POR_ESTADO[EstadoEnvio.EN_SUCURSAL_DESTINO],
         },
       });
     }
@@ -388,10 +412,11 @@ export class ShipmentRepository {
   /** Guard: solo aplica si la transferencia aún no tenía fechaLlegada registrada. */
   async confirmTransferArrival(params: ConfirmTransferArrivalParams) {
     return this.prisma.$transaction(async (tx) => {
-      const transferenciaActualizada = await tx.transferenciaSucursal.updateMany({
-        where: { id: params.transferenciaId, fechaLlegada: null },
-        data: { fechaLlegada: new Date() },
-      });
+      const transferenciaActualizada =
+        await tx.transferenciaSucursal.updateMany({
+          where: { id: params.transferenciaId, fechaLlegada: null },
+          data: { fechaLlegada: new Date() },
+        });
 
       if (transferenciaActualizada.count === 0) {
         return null;
@@ -571,7 +596,9 @@ export class ShipmentRepository {
   async findEntregaById(entregaId: string) {
     return this.prisma.entrega.findUnique({
       where: { id: entregaId },
-      include: { envio: { select: { id: true, estado: true, pesoRealKg: true } } },
+      include: {
+        envio: { select: { id: true, estado: true, pesoRealKg: true } },
+      },
     });
   }
 }

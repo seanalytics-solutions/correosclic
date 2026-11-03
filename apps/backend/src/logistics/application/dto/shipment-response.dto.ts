@@ -40,6 +40,22 @@ export class ShipmentTransferDto {
   fechaLlegada!: Date | null;
 }
 
+// NUEVO: dirección de entrega del pedido. Solo la reciben el cliente y el repartidor.
+export class ShipmentDeliveryAddressDto {
+  alias!: string | null;
+  calle!: string;
+  numeroExterior!: string;
+  numeroInterior!: string | null;
+  colonia!: string | null;
+  referencias!: string | null;
+  direccionFormateada!: string | null;
+  codigoPostal!: string;
+  ciudad!: string;
+  estadoProvincia!: string;
+  latitud!: number;
+  longitud!: number;
+}
+
 export class ShipmentResponseDto {
   id!: string;
   trackingInterno!: string;
@@ -54,6 +70,7 @@ export class ShipmentResponseDto {
   entrega!: ShipmentDeliveryDto | null;
   transferencias!: ShipmentTransferDto[];
   historial!: TrackingEventDto[];
+  direccionEntrega!: ShipmentDeliveryAddressDto | null;
 
   static fromRecord(record: ShipmentDetailRecord): ShipmentResponseDto {
     const dto = new ShipmentResponseDto();
@@ -101,6 +118,25 @@ export class ShipmentResponseDto {
       descripcion: evento.descripcion,
       createdAt: evento.createdAt,
     }));
+
+    // NUEVO: dirección de entrega del pedido
+    const dir = record.pedidoVendedor?.pedido?.direccionEntrega;
+    dto.direccionEntrega = dir
+      ? {
+          alias: dir.alias,
+          calle: dir.calle,
+          numeroExterior: dir.numeroExterior,
+          numeroInterior: dir.numeroInterior,
+          colonia: dir.colonia,
+          referencias: dir.referencias,
+          direccionFormateada: dir.direccionFormateada,
+          codigoPostal: dir.codigoPostal.codigo,
+          ciudad: dir.ciudad.nombre,
+          estadoProvincia: dir.estadoProvincia.nombre,
+          latitud: Number(dir.latitud),
+          longitud: Number(dir.longitud),
+        }
+      : null;
 
     return dto;
   }

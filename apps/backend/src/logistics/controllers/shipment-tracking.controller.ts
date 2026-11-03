@@ -106,6 +106,11 @@ export class ShipmentTrackingController {
       throw new ShipmentNotFoundException();
     }
 
-    return ShipmentResponseDto.fromRecord(envio);
+    // CAMBIO: la dirección solo la ven el cliente dueño y el repartidor asignado
+    const dto = ShipmentResponseDto.fromRecord(envio);
+    if (!esDelCliente && !esSuEntrega) {
+      dto.direccionEntrega = null;
+    }
+    return dto;
   }
 }
