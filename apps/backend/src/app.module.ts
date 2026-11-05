@@ -16,7 +16,7 @@ import { OrdersModule } from './orders/orders.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { PaymentsModule } from './payments/payments.module';
 import { LogisticsModule } from './logistics/logistics.module';
-
+import { AddressesModule } from './addresses/addresses.module'; // Nuevo
 
 @Module({
   imports: [
@@ -39,6 +39,7 @@ import { LogisticsModule } from './logistics/logistics.module';
     OrdersModule,
     PaymentsModule,
     LogisticsModule,
+    AddressesModule,
   ],
 })
 export class AppModule {}
