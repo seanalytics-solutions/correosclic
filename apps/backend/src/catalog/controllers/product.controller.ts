@@ -29,6 +29,7 @@ import { InventoryService } from '../application/services/inventory.service';
 import { CreateInventoryDto } from '../application/dto/create-inventory.dto';
 
 import { UpdateInventoryDto } from '../application/dto/update-inventory.dto';
+import { UpdateProductDto } from '../application/dto/update-product.dto'; // NUEVO
 import { UpdateProductPublicationDto } from '../application/dto/update-product-publication.dto';
 import { ProductImageService } from '../product-image/services/product-image.service';
 
@@ -101,6 +102,25 @@ export class ProductController {
       user.id,
       productId,
       dto.publicado,
+    );
+  }
+
+  /** NUEVO: edita nombre, descripción y peso de un producto propio. */
+  @Patch(':id')
+  updateDetails(
+    @CurrentUser()
+    user: AuthenticatedUserDto,
+
+    @Param('id', ParseUUIDPipe)
+    productId: string,
+
+    @Body()
+    dto: UpdateProductDto,
+  ) {
+    return this.productService.updateDetails(
+      user.id,
+      productId,
+      dto,
     );
   }
 
