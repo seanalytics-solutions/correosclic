@@ -30,6 +30,7 @@ import { CreateInventoryDto } from '../application/dto/create-inventory.dto';
 
 import { UpdateInventoryDto } from '../application/dto/update-inventory.dto';
 import { UpdateProductDto } from '../application/dto/update-product.dto'; // NUEVO
+import { UpdateProductVariantDto } from '../application/dto/update-product-variant.dto'; // NUEVO
 import { UpdateProductPublicationDto } from '../application/dto/update-product-publication.dto';
 import { ProductImageService } from '../product-image/services/product-image.service';
 
@@ -124,6 +125,25 @@ export class ProductController {
     );
   }
 
+    /** NUEVO: edita SKU, precio y peso de una variante propia. */
+  @Patch('variants/:id')
+  updateVariant(
+    @CurrentUser()
+    user: AuthenticatedUserDto,
+
+    @Param('id', ParseUUIDPipe)
+    variantId: string,
+
+    @Body()
+    dto: UpdateProductVariantDto,
+  ) {
+    return this.variantService.update(
+      user.id,
+      variantId,
+      dto,
+    );
+  }
+  
   @Post()
   create(
     @CurrentUser()

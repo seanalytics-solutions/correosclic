@@ -4,6 +4,8 @@ import { VariantRepository } from '../../infrastructure/repositories/variant.rep
 import { SellerRepository } from '../../infrastructure/repositories/seller.repository';
 
 import { CreateProductVariantDto } from '../dto/create-product-variant.dto';
+import { UpdateProductVariantDto } from '../dto/update-product-variant.dto'; // NUEVO
+import { VariantNotFoundException } from '../../domain/exceptions/variant-not-found.exception'; // NUEVO
 import { ProductVariantResponseDto } from '../dto/product-variant-response.dto';
 
 import { ProductNotFoundException } from '../../domain/exceptions/product-not-found.exception';
@@ -97,6 +99,95 @@ export class VariantService {
           dto.valorAtributoIds,
 
       });
+
+    const response: ProductVariantResponseDto = {
+
+      id: variant.id,
+
+      sku: variant.sku,
+
+      precio: Number(
+        variant.precio,
+      ),
+
+      pesoKg:
+        variant.pesoKg != null
+          ? Number(variant.pesoKg)
+          : undefined,
+
+      activa: variant.activa,
+
+      createdAt: variant.createdAt,
+
+    };
+
+    return response;
+
+  }
+  
+  /** NUEVO: edita SKU, precio y peso de una variante del vendedor.
+   *  Variante inexistente o de otra tienda → 404 (mismo criterio que inventario). */
+  async update(
+    userId: string,
+    variantId: string,
+    dto: UpdateProductVariantDto,
+  ): Promise<ProductVariantResponseDto> {
+
+    // Paso 1. Obtener tienda del vendedor
+    const store =
+      await this.sellerRepository.findStoreByUserId(
+        userId,
+      );
+
+    if (!store) {
+      throw new SellerNotFoundException();
+    }
+
+    // Paso 2. Validar que la variante pertenece al vendedor
+    const owned =
+      await this.repository.findByIdWithStore(
+        variantId,
+      );
+
+    if (
+      !owned ||
+      owned.producto.tiendaId !== store.id
+    ) {
+      throw new VariantNotFoundException();
+    }
+
+    // Paso 3. Si cambia el SKU: normalizarlo y validar que no lo use otra variante
+    let sku: string | undefined;
+
+    if (dto.sku !== undefined) {
+      sku =
+        this.normalizeSku(
+          dto.sku,
+        );
+
+      const existingSku =
+        await this.repository.findVariantBySku(
+          sku,
+        );
+
+      if (
+        existingSku &&
+        existingSku.id !== variantId
+      ) {
+        throw new VariantSkuAlreadyExistsException();
+      }
+    }
+
+    // Paso 4. Guardar cambios
+    const variant =
+      await this.repository.updateVariant(
+        variantId,
+        {
+          sku,
+          precio: dto.precio,
+          pesoKg: dto.pesokg,
+        },
+      );
 
     const response: ProductVariantResponseDto = {
 
