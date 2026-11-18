@@ -8,6 +8,8 @@ import {
   UseGuards,
   Param,
   Patch,
+  Delete,
+  HttpCode,
   UploadedFile,
   UseInterceptors,
   ParseFilePipe,
@@ -141,6 +143,21 @@ export class ProductController {
       user.id,
       variantId,
       dto,
+    );
+  }
+  
+  @Delete(':id')
+  @HttpCode(204)
+  remove(
+    @CurrentUser()
+    user: AuthenticatedUserDto,
+
+    @Param('id', ParseUUIDPipe)
+    productId: string,
+  ){
+    return this.productService.remove(
+      user.id,
+      productId,
     );
   }
   

@@ -290,6 +290,25 @@ export class ProductService {
 
     return this.findMineById(userId, productId);
   }
+  
+    /** NUEVO: elimina (borrado lógico) un producto de la tienda.
+   *  Producto inexistente, de otra tienda o ya eliminado → 404. */
+  async remove(
+    userId: string,
+    productId: string,
+  ): Promise<void> {
+    const store = await this.findOwnStoreOrThrow(userId);
+
+    const eliminados = await this.productRepository.softDelete(
+      productId,
+      store.id,
+    );
+
+    if (eliminados === 0) {
+      throw new ProductNotFoundException();
+    }
+  }
+
   private async assertPublishable(
     productId: string,
     tiendaId: string,
