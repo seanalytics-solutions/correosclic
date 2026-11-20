@@ -16,7 +16,7 @@ export class UpdateProductDto {
   readonly nombre?: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsString()
   @MaxLength(5000)
   readonly descripcion?: string;
 
