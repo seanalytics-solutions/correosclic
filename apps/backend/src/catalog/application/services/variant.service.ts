@@ -185,7 +185,7 @@ export class VariantService {
         {
           sku,
           precio: dto.precio,
-          pesoKg: dto.pesokg,
+          pesoKg: dto.pesoKg,
         },
       );
 

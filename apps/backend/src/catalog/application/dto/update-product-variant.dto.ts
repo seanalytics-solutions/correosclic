@@ -23,5 +23,5 @@ export class UpdateProductVariantDto {
   @IsOptional()
   @IsNumber()
   @Min(0.001)
-  readonly pesokg?: number;
+  readonly pesoKg?: number;
 }
