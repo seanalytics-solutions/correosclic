@@ -200,6 +200,36 @@ export class ProductRepository {
 
     return result.count;
   }
+
+  /** NUEVO: edita nombre, descripción y peso de un producto de la tienda.
+   *  Devuelve cuántos se actualizaron: 0 = no existe o no es de esa tienda. */
+  async updateDetails(
+    productoId: string,
+    tiendaId: string,
+    data: { nombre?: string; descripcion?: string; pesoKg?: number },
+  ): Promise<number> {
+    const result = await this.prisma.producto.updateMany({
+      where: { id: productoId, tiendaId },
+      data,
+    });
+
+    return result.count;
+  }
+
+    /** NUEVO: borrado lógico de un producto de la tienda (activo y publicado en false).
+   *  Devuelve 0 si no existe, no es de esa tienda o ya estaba eliminado. */
+  async softDelete(
+    productoId: string,
+    tiendaId: string,
+  ): Promise<number> {
+    const result = await this.prisma.producto.updateMany({
+      where: { id: productoId, tiendaId, activo: true },
+      data: { activo: false, publicado: false },
+    });
+
+    return result.count;
+  }
+
   /** Catálogo público: productos publicados y activos, sin restricción de tienda. */
   async findManyPublic(params: {
     skip: number;

@@ -15,6 +15,7 @@ import {
   PublicProductListResponseDto,
   PublicProductDetailResponseDto,
 } from '../dto/public-product-response.dto';
+import { UpdateProductDto } from '../dto/update-product.dto'; // NUEVO
 
 @Injectable()
 export class ProductService {
@@ -262,6 +263,50 @@ export class ProductService {
     }
 
     return this.findMineById(userId, productId);
+  }
+
+  /** NUEVO: edita nombre, descripción y peso de un producto de la tienda.
+   *  Producto inexistente o de otra tienda → 404 (mismo criterio que updatePublication). */
+  async updateDetails(
+    userId: string,
+    productId: string,
+    dto: UpdateProductDto,
+  ): Promise<SellerProductDetailResponseDto> {
+    const store = await this.findOwnStoreOrThrow(userId);
+
+    const actualizados = await this.productRepository.updateDetails(
+      productId,
+      store.id,
+      {
+        nombre: dto.nombre,
+        descripcion: dto.descripcion,
+        pesoKg: dto.pesoKg,
+      },
+    );
+
+    if (actualizados === 0) {
+      throw new ProductNotFoundException();
+    }
+
+    return this.findMineById(userId, productId);
+  }
+  
+    /** NUEVO: elimina (borrado lógico) un producto de la tienda.
+   *  Producto inexistente, de otra tienda o ya eliminado → 404. */
+  async remove(
+    userId: string,
+    productId: string,
+  ): Promise<void> {
+    const store = await this.findOwnStoreOrThrow(userId);
+
+    const eliminados = await this.productRepository.softDelete(
+      productId,
+      store.id,
+    );
+
+    if (eliminados === 0) {
+      throw new ProductNotFoundException();
+    }
   }
 
   private async assertPublishable(
