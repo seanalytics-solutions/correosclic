@@ -8,6 +8,8 @@ import {
   UseGuards,
   Param,
   Patch,
+  Delete,
+  HttpCode,
   UploadedFile,
   UseInterceptors,
   ParseFilePipe,
@@ -29,6 +31,8 @@ import { InventoryService } from '../application/services/inventory.service';
 import { CreateInventoryDto } from '../application/dto/create-inventory.dto';
 
 import { UpdateInventoryDto } from '../application/dto/update-inventory.dto';
+import { UpdateProductDto } from '../application/dto/update-product.dto'; // NUEVO
+import { UpdateProductVariantDto } from '../application/dto/update-product-variant.dto'; // NUEVO
 import { UpdateProductPublicationDto } from '../application/dto/update-product-publication.dto';
 import { ProductImageService } from '../product-image/services/product-image.service';
 
@@ -104,6 +108,59 @@ export class ProductController {
     );
   }
 
+  /** NUEVO: edita nombre, descripción y peso de un producto propio. */
+  @Patch(':id')
+  updateDetails(
+    @CurrentUser()
+    user: AuthenticatedUserDto,
+
+    @Param('id', ParseUUIDPipe)
+    productId: string,
+
+    @Body()
+    dto: UpdateProductDto,
+  ) {
+    return this.productService.updateDetails(
+      user.id,
+      productId,
+      dto,
+    );
+  }
+
+    /** NUEVO: edita SKU, precio y peso de una variante propia. */
+  @Patch('variants/:id')
+  updateVariant(
+    @CurrentUser()
+    user: AuthenticatedUserDto,
+
+    @Param('id', ParseUUIDPipe)
+    variantId: string,
+
+    @Body()
+    dto: UpdateProductVariantDto,
+  ) {
+    return this.variantService.update(
+      user.id,
+      variantId,
+      dto,
+    );
+  }
+  
+  @Delete(':id')
+  @HttpCode(204)
+  remove(
+    @CurrentUser()
+    user: AuthenticatedUserDto,
+
+    @Param('id', ParseUUIDPipe)
+    productId: string,
+  ){
+    return this.productService.remove(
+      user.id,
+      productId,
+    );
+  }
+  
   @Post()
   create(
     @CurrentUser()

@@ -116,6 +116,20 @@ async findByIdWithStore(
   });
 }
 
+/** NUEVO: edita SKU, precio y peso de una variante.
+ *  La propiedad se comprueba antes en el service con findByIdWithStore. */
+async updateVariant(
+  variantId: string,
+  data: { sku?: string; precio?: number; pesoKg?: number },
+) {
+  return this.prisma.productoVariante.update({
+    where: {
+      id: variantId,
+    },
+    data,
+  });
+}
+
 async findCompleteById(
   variantId: string,
 ) {
