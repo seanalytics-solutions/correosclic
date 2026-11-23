@@ -51,6 +51,6 @@ import { MailerModule } from './domain/services/mailer.module';
       useClass: JwtTokenService,
     },
   ],
-  exports: [AuthService, UserRepository],
+  exports: [AuthService, UserRepository, PasswordService], //CAMBIO: Lo usa en el módulo users
 })
 export class AuthModule {}

@@ -17,6 +17,7 @@ import { IdempotencyModule } from './idempotency/idempotency.module';
 import { PaymentsModule } from './payments/payments.module';
 import { LogisticsModule } from './logistics/logistics.module';
 import { AddressesModule } from './addresses/addresses.module'; // Nuevo
+import { UsersModule } from './users/users.module'; // NUEVO
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AddressesModule } from './addresses/addresses.module'; // Nuevo
     PaymentsModule,
     LogisticsModule,
     AddressesModule,
+    UsersModule,
   ],
 })
 export class AppModule {}
